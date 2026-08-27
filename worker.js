@@ -263,72 +263,80 @@ const transports = {};
 
 export default {
   async fetch(request, env, ctx) {
-    const url = new URL(request.url);
+    try {
+      const url = new URL(request.url);
 
-    if (env.AUTH_TOKEN) {
-      const authHeader = request.headers.get("Authorization");
-      if (!authHeader || !authHeader.startsWith("Bearer ") || authHeader.split(" ")[1] !== env.AUTH_TOKEN) {
-        return new Response(JSON.stringify({ error: "Unauthorized: Invalid or missing token" }), {
-          status: 401,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-    }
-
-    if (url.pathname === "/health") {
-      return new Response(JSON.stringify({ status: "healthy", timestamp: new Date().toISOString(), service: "Spark Assistant Slack MCP Worker" }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-
-    if (url.pathname === "/mcp") {
-      const botToken = env.SLACK_BOT_TOKEN || "";
-      const slackClient = new SlackClient(botToken);
-      const sessionId = request.headers.get("mcp-session-id");
-
-      if (request.method === "POST") {
-        let body;
-        try {
-          body = await request.json();
-        } catch {
-          body = null;
-        }
-
-        let transport;
-        if (sessionId && transports[sessionId]) {
-          transport = transports[sessionId];
-        } else if (!sessionId && body?.method === "initialize") {
-          transport = new StreamableHTTPServerTransport({
-            sessionIdGenerator: () => crypto.randomUUID(),
-            onsessioninitialized: (id) => { transports[id] = transport; },
-          });
-          transport.onclose = () => {
-            if (transport.sessionId) delete transports[transport.sessionId];
-          };
-          const server = createSlackServer(slackClient, env);
-          await server.connect(transport);
-        } else {
-          return new Response(JSON.stringify({ jsonrpc: "2.0", error: { code: -32000, message: "Bad Request: Invalid session or non-initialize request" }, id: null }), {
-            status: 400,
+      if (env.AUTH_TOKEN) {
+        const authHeader = request.headers.get("Authorization");
+        if (!authHeader || !authHeader.startsWith("Bearer ") || authHeader.split(" ")[1] !== env.AUTH_TOKEN) {
+          return new Response(JSON.stringify({ error: "Unauthorized: Invalid or missing token" }), {
+            status: 401,
             headers: { "Content-Type": "application/json" },
           });
         }
-
-        return await transport.handleRequest(request, body);
       }
 
-      if (request.method === "GET" || request.method === "DELETE") {
-        if (!sessionId || !transports[sessionId]) {
-          return new Response("Invalid or missing session ID", { status: 400 });
+      if (url.pathname === "/health") {
+        return new Response(JSON.stringify({ status: "healthy", timestamp: new Date().toISOString(), service: "Spark Assistant Slack MCP Worker" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.pathname === "/mcp") {
+        const botToken = env.SLACK_BOT_TOKEN || "";
+        const slackClient = new SlackClient(botToken);
+        const sessionId = request.headers.get("mcp-session-id");
+
+        if (request.method === "POST") {
+          let body;
+          try {
+            body = await request.json();
+          } catch {
+            body = null;
+          }
+
+          let transport;
+          if (sessionId && transports[sessionId]) {
+            transport = transports[sessionId];
+          } else if (!sessionId && body?.method === "initialize") {
+            transport = new StreamableHTTPServerTransport({
+              sessionIdGenerator: () => crypto.randomUUID(),
+              onsessioninitialized: (id) => { transports[id] = transport; },
+            });
+            transport.onclose = () => {
+              if (transport.sessionId) delete transports[transport.sessionId];
+            };
+            const server = createSlackServer(slackClient, env);
+            await server.connect(transport);
+          } else {
+            return new Response(JSON.stringify({ jsonrpc: "2.0", error: { code: -32000, message: "Bad Request: Invalid session or non-initialize request" }, id: null }), {
+              status: 400,
+              headers: { "Content-Type": "application/json" },
+            });
+          }
+
+          return await transport.handleRequest(request, body);
         }
-        return await transports[sessionId].handleRequest(request);
-      }
-    }
 
-    return new Response(JSON.stringify({ status: "healthy", message: "Spark Assistant Slack MCP Cloudflare Worker", endpoints: ["/mcp", "/health"] }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
+        if (request.method === "GET" || request.method === "DELETE") {
+          if (!sessionId || !transports[sessionId]) {
+            return new Response("Invalid or missing session ID", { status: 400 });
+          }
+          return await transports[sessionId].handleRequest(request);
+        }
+      }
+
+      return new Response(JSON.stringify({ status: "healthy", message: "Spark Assistant Slack MCP Cloudflare Worker", endpoints: ["/mcp", "/health"] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (err) {
+      console.error("Worker fetch unhandled exception:", err);
+      return new Response(JSON.stringify({ error: err?.message || String(err) }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
   },
 };
