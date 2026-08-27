@@ -1,6 +1,9 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "spark-slack-mcp",
+  "name": "spark-assistant-slack-mcp",
   "main": "worker.js",
-  "compatibility_date": "2024-09-23"
+  "compatibility_date": "2024-09-23",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ]
 }
