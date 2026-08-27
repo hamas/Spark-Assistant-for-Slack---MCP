@@ -444,15 +444,14 @@ async function runStdioServer(slackClient: SlackClient) {
   console.error("Slack MCP Server running on stdio");
 }
 
-async function runHttpServer(slackClient: SlackClient, port: number = 3000, authToken?: string) {
-  console.error(`Starting Slack MCP Server with Streamable HTTP transport on port ${port}...`);
-  
+export function createApp(slackClient: SlackClient, authToken?: string) {
   const app = express();
   app.use(express.json());
 
   // Authorization middleware
   const authMiddleware = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-    if (!authToken) {
+    const tokenToUse = authToken || process.env.AUTH_TOKEN;
+    if (!tokenToUse) {
       // No auth token configured, skip authorization
       return next();
     }
@@ -470,7 +469,7 @@ async function runHttpServer(slackClient: SlackClient, port: number = 3000, auth
     }
 
     const token = authHeader.substring(7); // Remove 'Bearer ' prefix
-    if (token !== authToken) {
+    if (token !== tokenToUse) {
       return res.status(401).json({
         jsonrpc: '2.0',
         error: {
@@ -575,6 +574,16 @@ async function runHttpServer(slackClient: SlackClient, port: number = 3000, auth
     });
   });
 
+  app.get('/', (req, res) => {
+    res.redirect('/health');
+  });
+
+  return app;
+}
+
+async function runHttpServer(slackClient: SlackClient, port: number = 3000, authToken?: string) {
+  console.error(`Starting Slack MCP Server with Streamable HTTP transport on port ${port}...`);
+  const app = createApp(slackClient, authToken);
   const server = app.listen(port, '0.0.0.0', () => {
     console.error(`Slack MCP Server running on http://0.0.0.0:${port}/mcp`);
   });
