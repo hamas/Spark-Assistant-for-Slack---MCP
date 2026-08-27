@@ -1,5 +1,4 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
 
 class SlackClient {
@@ -259,8 +258,6 @@ function createSlackServer(slackClient, env) {
   return server;
 }
 
-const transports = {};
-
 export default {
   async fetch(request, env, ctx) {
     try {
@@ -283,57 +280,110 @@ export default {
         });
       }
 
-      if (url.pathname === "/mcp") {
-        const botToken = env.SLACK_BOT_TOKEN || "";
-        const slackClient = new SlackClient(botToken);
-        const sessionId = request.headers.get("mcp-session-id");
+      const botToken = env.SLACK_BOT_TOKEN || "";
+      const slackClient = new SlackClient(botToken);
+      const server = createSlackServer(slackClient, env);
 
-        if (request.method === "POST") {
-          let body;
-          try {
-            body = await request.json();
-          } catch {
-            body = null;
-          }
-
-          let transport;
-          if (sessionId && transports[sessionId]) {
-            transport = transports[sessionId];
-          } else if (!sessionId && body?.method === "initialize") {
-            transport = new StreamableHTTPServerTransport({
-              sessionIdGenerator: () => crypto.randomUUID(),
-              onsessioninitialized: (id) => { transports[id] = transport; },
-            });
-            transport.onclose = () => {
-              if (transport.sessionId) delete transports[transport.sessionId];
-            };
-            const server = createSlackServer(slackClient, env);
-            await server.connect(transport);
-          } else {
-            return new Response(JSON.stringify({ jsonrpc: "2.0", error: { code: -32000, message: "Bad Request: Invalid session or non-initialize request" }, id: null }), {
-              status: 400,
-              headers: { "Content-Type": "application/json" },
-            });
-          }
-
-          return await transport.handleRequest(request, body);
+      if (request.method === "POST" && (url.pathname === "/mcp" || url.pathname === "/")) {
+        const body = await request.json();
+        
+        // Custom lightweight JSON-RPC handler for Cloudflare Workers
+        if (body.method === "initialize") {
+          return new Response(JSON.stringify({
+            jsonrpc: "2.0",
+            id: body.id,
+            result: {
+              protocolVersion: "2024-11-05",
+              capabilities: {
+                tools: {}
+              },
+              serverInfo: {
+                name: "spark-assistant-slack-mcp",
+                version: "1.0.0"
+              }
+            }
+          }), {
+            headers: { "Content-Type": "application/json" }
+          });
         }
 
-        if (request.method === "GET" || request.method === "DELETE") {
-          if (!sessionId || !transports[sessionId]) {
-            return new Response("Invalid or missing session ID", { status: 400 });
+        if (body.method === "tools/list") {
+          return new Response(JSON.stringify({
+            jsonrpc: "2.0",
+            id: body.id,
+            result: {
+              tools: [
+                { name: "slack_list_channels", description: "List public and private channels in the workspace" },
+                { name: "slack_post_message", description: "Post a message to a Slack channel" },
+                { name: "slack_reply_to_thread", description: "Reply to a message thread" },
+                { name: "slack_add_reaction", description: "Add an emoji reaction to a message" },
+                { name: "slack_get_channel_history", description: "Get channel message history" },
+                { name: "slack_get_thread_replies", description: "Get replies in a thread" },
+                { name: "slack_get_users", description: "Get list of workspace users" },
+                { name: "slack_get_user_profile", description: "Get detailed profile for a user" },
+                { name: "slack_auth_test", description: "Test Slack API authentication and workspace info" }
+              ]
+            }
+          }), {
+            headers: { "Content-Type": "application/json" }
+          });
+        }
+
+        if (body.method === "tools/call") {
+          const { name, arguments: args } = body.params || {};
+          let resultText = "";
+
+          if (name === "slack_auth_test") {
+            const res = await slackClient.authTest();
+            resultText = res.ok ? `Authenticated successfully as ${res.user} (ID: ${res.user_id}) on workspace ${res.team}` : `Auth failed: ${res.error}`;
+          } else if (name === "slack_list_channels") {
+            const res = await slackClient.getChannels(args?.limit, args?.cursor, env.SLACK_TEAM_ID, env.SLACK_CHANNEL_IDS);
+            resultText = res.ok ? JSON.stringify(res.channels) : `Error: ${res.error}`;
+          } else if (name === "slack_post_message") {
+            const res = await slackClient.postMessage(args?.channel_id, args?.text);
+            resultText = res.ok ? "Message posted successfully" : `Error: ${res.error}`;
+          } else if (name === "slack_reply_to_thread") {
+            const res = await slackClient.postReply(args?.channel_id, args?.thread_ts, args?.text);
+            resultText = res.ok ? "Reply posted successfully" : `Error: ${res.error}`;
+          } else if (name === "slack_add_reaction") {
+            const res = await slackClient.addReaction(args?.channel_id, args?.timestamp, args?.reaction);
+            resultText = res.ok ? "Reaction added" : `Error: ${res.error}`;
+          } else if (name === "slack_get_channel_history") {
+            const res = await slackClient.getChannelHistory(args?.channel_id, args?.limit);
+            resultText = res.ok ? JSON.stringify(res.messages) : `Error: ${res.error}`;
+          } else if (name === "slack_get_thread_replies") {
+            const res = await slackClient.getThreadReplies(args?.channel_id, args?.thread_ts);
+            resultText = res.ok ? JSON.stringify(res.messages) : `Error: ${res.error}`;
+          } else if (name === "slack_get_users") {
+            const res = await slackClient.getUsers(args?.limit, args?.cursor, env.SLACK_TEAM_ID);
+            resultText = res.ok ? JSON.stringify(res.members) : `Error: ${res.error}`;
+          } else if (name === "slack_get_user_profile") {
+            const res = await slackClient.getUserProfile(args?.user_id);
+            resultText = res.ok ? JSON.stringify(res.profile) : `Error: ${res.error}`;
+          } else {
+            return new Response(JSON.stringify({ jsonrpc: "2.0", id: body.id, error: { code: -32601, message: "Method not found" } }), { status: 404 });
           }
-          return await transports[sessionId].handleRequest(request);
+
+          return new Response(JSON.stringify({
+            jsonrpc: "2.0",
+            id: body.id,
+            result: {
+              content: [{ type: "text", text: resultText }]
+            }
+          }), { headers: { "Content-Type": "application/json" } });
         }
       }
 
-      return new Response(JSON.stringify({ status: "healthy", message: "Spark Assistant Slack MCP Cloudflare Worker", endpoints: ["/mcp", "/health"] }), {
+      return new Response(JSON.stringify({
+        status: "healthy",
+        service: "Spark Assistant Slack MCP Cloudflare Worker",
+        endpoints: ["/mcp", "/health"]
+      }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
       });
     } catch (err) {
-      console.error("Worker fetch unhandled exception:", err);
-      return new Response(JSON.stringify({ error: err?.message || String(err) }), {
+      return new Response(JSON.stringify({ error: err?.message || String(err), stack: err?.stack }), {
         status: 500,
         headers: { "Content-Type": "application/json" },
       });
