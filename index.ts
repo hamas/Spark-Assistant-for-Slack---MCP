@@ -6,7 +6,43 @@ import { z } from "zod";
 import express from "express";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from 'node:url';
-import { resolve } from 'node:path';
+import { resolve, dirname } from 'node:path';
+import { readFileSync, existsSync } from 'node:fs';
+
+export function loadEnv() {
+  const currentDir = typeof __dirname !== 'undefined' ? __dirname : dirname(fileURLToPath(import.meta.url));
+  const envPaths = [
+    resolve(process.cwd(), '.env'),
+    resolve(currentDir, '.env'),
+    resolve(currentDir, '../.env')
+  ];
+
+  for (const envPath of envPaths) {
+    if (existsSync(envPath)) {
+      try {
+        const content = readFileSync(envPath, 'utf-8');
+        for (const line of content.split('\n')) {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed.startsWith('#')) continue;
+          const eqIdx = trimmed.indexOf('=');
+          if (eqIdx > 0) {
+            const key = trimmed.slice(0, eqIdx).trim();
+            let val = trimmed.slice(eqIdx + 1).trim();
+            if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+              val = val.slice(1, -1);
+            }
+            if (!process.env[key]) {
+              process.env[key] = val;
+            }
+          }
+        }
+        break;
+      } catch {
+        // Ignore read errors
+      }
+    }
+  }
+}
 
 // Type definitions for tool arguments
 interface ListChannelsArgs {
@@ -218,15 +254,39 @@ export class SlackClient {
 
     return response.json();
   }
+
+  async authTest(): Promise<any> {
+    const response = await fetch("https://slack.com/api/auth.test", {
+      method: "POST",
+      headers: this.botHeaders,
+    });
+
+    return response.json();
+  }
 }
 
 export function createSlackServer(slackClient: SlackClient): McpServer {
   const server = new McpServer({
-    name: "Slack MCP Server",
+    name: "Spark Assistant Slack MCP Server",
     version: "1.0.0",
   });
 
   // Register all Slack tools using the modern API
+  server.registerTool(
+    "slack_auth_test",
+    {
+      title: "Test Slack Authentication",
+      description: "Test bot token authentication and retrieve connected workspace and bot user details",
+      inputSchema: {},
+    },
+    async () => {
+      const response = await slackClient.authTest();
+      return {
+        content: [{ type: "text", text: JSON.stringify(response) }],
+      };
+    }
+  );
+
   server.registerTool(
     "slack_list_channels",
     {
@@ -576,6 +636,7 @@ Examples:
 }
 
 export async function main() {
+  loadEnv();
   const { transport, port, authToken } = parseArgs();
   
   const botToken = process.env.SLACK_BOT_TOKEN;

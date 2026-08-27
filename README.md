@@ -1,69 +1,75 @@
-# slack-mcp-server
-## Disclaimer
-This project includes [code](https://github.com/modelcontextprotocol/servers-archived/tree/main/src/slack) originally developed by Anthropic and released under the MIT License. Substantial modifications and new functionality have been added by For Good AI Inc. (dba Zencoder Inc.), and are licensed under the Apache License, Version 2.0.
+# Spark Assistant for Slack - MCP Server
 
-## Overview
-A Model Context Protocol (MCP) server for interacting with Slack workspaces. This server provides tools to list channels, post messages, reply to threads, add reactions, get channel history, and manage users.
+A Model Context Protocol (MCP) server for interacting with Slack workspaces, customized for **Spark Assistant**. This server provides tools to list channels, post messages, reply to threads, add emoji reactions, retrieve channel history, inspect user profiles, and test Slack API authentication.
 
-## Available Tools
+---
 
-1. **slack_list_channels**
-   - List public or pre-defined channels in the workspace
-   - Optional inputs:
-     - `limit` (number, default: 100, max: 200): Maximum number of channels to return
-     - `cursor` (string): Pagination cursor for next page
-   - Returns: List of channels with their IDs and information
+## ⚡ Quick Start
 
-2. **slack_post_message**
-   - Post a new message to a Slack channel
-   - Required inputs:
-     - `channel_id` (string): The ID of the channel to post to
-     - `text` (string): The message text to post
-   - Returns: Message posting confirmation and timestamp
+1. **Install dependencies and build:**
+   ```bash
+   npm install
+   npm run build
+   ```
 
-3. **slack_reply_to_thread**
-   - Reply to a specific message thread
-   - Required inputs:
-     - `channel_id` (string): The channel containing the thread
-     - `thread_ts` (string): Timestamp of the parent message
-     - `text` (string): The reply text
-   - Returns: Reply confirmation and timestamp
+2. **Configure Environment Variables:**
+   Copy `.env.example` to `.env` and fill in your Slack credentials:
+   ```bash
+   cp .env.example .env
+   ```
+   ```env
+   SLACK_BOT_TOKEN=xoxb-your-slack-bot-token
+   SLACK_TEAM_ID=T00000000
+   ```
 
-4. **slack_add_reaction**
+3. **Run the Server:**
+   ```bash
+   # Standard stdio mode (for Claude Desktop / Antigravity / Cursor / Windsurf)
+   node dist/index.js
+
+   # HTTP mode on port 3000
+   node dist/index.js --transport http --port 3000
+   ```
+
+---
+
+## 🛠️ Available Tools
+
+1. **`slack_auth_test`**
+   - Test bot token authentication and retrieve connected workspace and bot user details
+   - Returns: Workspace name, team ID, bot user ID, and auth URL
+
+2. **`slack_list_channels`**
+   - List public and private channels that the bot is a member of, or pre-defined channels in the workspace
+   - Optional inputs: `limit` (default: 100, max: 200), `cursor` (pagination)
+
+3. **`slack_post_message`**
+   - Post a new message to a Slack channel or direct message user
+   - Required inputs: `channel_id`, `text`
+
+4. **`slack_reply_to_thread`**
+   - Reply to a specific message thread in Slack
+   - Required inputs: `channel_id`, `thread_ts`, `text`
+
+5. **`slack_add_reaction`**
    - Add an emoji reaction to a message
-   - Required inputs:
-     - `channel_id` (string): The channel containing the message
-     - `timestamp` (string): Message timestamp to react to
-     - `reaction` (string): Emoji name without colons
-   - Returns: Reaction confirmation
+   - Required inputs: `channel_id`, `timestamp`, `reaction` (emoji name without colons)
 
-5. **slack_get_channel_history**
+6. **`slack_get_channel_history`**
    - Get recent messages from a channel
-   - Required inputs:
-     - `channel_id` (string): The channel ID
-   - Optional inputs:
-     - `limit` (number, default: 10): Number of messages to retrieve
-   - Returns: List of messages with their content and metadata
+   - Required inputs: `channel_id` | Optional: `limit` (default: 10)
 
-6. **slack_get_thread_replies**
+7. **`slack_get_thread_replies`**
    - Get all replies in a message thread
-   - Required inputs:
-     - `channel_id` (string): The channel containing the thread
-     - `thread_ts` (string): Timestamp of the parent message
-   - Returns: List of replies with their content and metadata
+   - Required inputs: `channel_id`, `thread_ts`
 
-7. **slack_get_users**
+8. **`slack_get_users`**
    - Get list of workspace users with basic profile information
-   - Optional inputs:
-     - `cursor` (string): Pagination cursor for next page
-     - `limit` (number, default: 100, max: 200): Maximum users to return
-   - Returns: List of users with their basic profiles
+   - Optional inputs: `cursor`, `limit` (default: 100, max: 200)
 
-8. **slack_get_user_profile**
+9. **`slack_get_user_profile`**
    - Get detailed profile information for a specific user
-   - Required inputs:
-     - `user_id` (string): The user's ID
-   - Returns: Detailed user profile information
+   - Required inputs: `user_id`
 
 ## Slack Bot Setup
 

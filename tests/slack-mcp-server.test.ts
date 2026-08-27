@@ -350,13 +350,43 @@ describe('SlackClient', () => {
 
     expect(result).toEqual(mockResponse);
     expect(mockFetch).toHaveBeenCalledWith(
-      expect.stringContaining('https://slack.com/api/users.profile.get'),
-      expect.objectContaining({
+      'https://slack.com/api/users.profile.get?user=U123456&include_labels=true',
+      {
         headers: {
           Authorization: 'Bearer xoxb-test-token',
           'Content-Type': 'application/json',
         },
-      })
+      }
+    );
+  });
+
+  test('authTest successful response', async () => {
+    const mockResponse = {
+      ok: true,
+      url: 'https://workspace.slack.com/',
+      team: 'Test Team',
+      user: 'test_bot',
+      team_id: 'T123456',
+      user_id: 'U123456',
+      bot_id: 'B123456',
+    };
+
+    mockFetch.mockResolvedValueOnce({
+      json: () => Promise.resolve(mockResponse),
+    });
+
+    const result = await slackClient.authTest();
+
+    expect(result).toEqual(mockResponse);
+    expect(mockFetch).toHaveBeenCalledWith(
+      'https://slack.com/api/auth.test',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer xoxb-test-token',
+          'Content-Type': 'application/json',
+        },
+      }
     );
   });
 });
