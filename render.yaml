@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: spark-assistant-slack-mcp
+    env: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: node dist/index.js --transport http
+    healthCheckPath: /health
+    envVars:
+      - key: SLACK_BOT_TOKEN
+        sync: false
+      - key: SLACK_TEAM_ID
+        sync: false
+      - key: AUTH_TOKEN
+        sync: false

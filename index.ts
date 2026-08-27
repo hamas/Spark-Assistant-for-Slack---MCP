@@ -10,6 +10,7 @@ import { resolve, dirname } from 'node:path';
 import { readFileSync, existsSync } from 'node:fs';
 
 export function loadEnv() {
+  if (process.env.NODE_ENV === 'test') return;
   const currentDir = typeof __dirname !== 'undefined' ? __dirname : dirname(fileURLToPath(import.meta.url));
   const envPaths = [
     resolve(process.cwd(), '.env'),
@@ -584,7 +585,7 @@ async function runHttpServer(slackClient: SlackClient, port: number = 3000, auth
 export function parseArgs() {
   const args = process.argv.slice(2);
   let transport = 'stdio'; // default
-  let port = 3000;
+  let port = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
   let authToken: string | undefined;
 
   for (let i = 0; i < args.length; i++) {
