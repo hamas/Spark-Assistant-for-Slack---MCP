@@ -133,8 +133,30 @@ export default {
       const botToken = env.SLACK_BOT_TOKEN || "";
       const slackClient = new SlackClient(botToken);
 
-      if (request.method === "POST" && (url.pathname === "/mcp" || url.pathname === "/")) {
+      if (request.method === "GET" && (url.pathname === "/sse" || url.pathname === "/mcp/sse")) {
+        const sessionId = crypto.randomUUID();
+        const messageUrl = `${url.origin}/messages?sessionId=${sessionId}`;
+
+        const bodyStream = new ReadableStream({
+          start(controller) {
+            const encoder = new TextEncoder();
+            controller.enqueue(encoder.encode(`event: endpoint\ndata: ${messageUrl}\n\n`));
+          }
+        });
+
+        return new Response(bodyStream, {
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive"
+          }
+        });
+      }
+
+      if (request.method === "POST" && (url.pathname === "/mcp" || url.pathname === "/" || url.pathname === "/messages")) {
         const body = await request.json();
+
 
         // Standard MCP Initialization
         if (body.method === "initialize") {
