@@ -1,5 +1,4 @@
 name = "spark-assistant-slack-mcp"
 main = "worker.js"
 compatibility_date = "2024-09-23"
-compatibility_flags = ["nodejs_compat", "nodejs_compat_v2"]
-node_compat = true
+compatibility_flags = ["nodejs_compat"]
