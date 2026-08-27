@@ -92,17 +92,33 @@ class SlackClient {
   }
 }
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS, DELETE",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, mcp-session-id, x-mcp-session-id",
+  "Access-Control-Expose-Headers": "mcp-session-id, x-mcp-session-id",
+};
+
 export default {
   async fetch(request, env, ctx) {
     try {
       const url = new URL(request.url);
 
+      // Handle CORS preflight requests
+      if (request.method === "OPTIONS") {
+        return new Response(null, {
+          status: 204,
+          headers: corsHeaders,
+        });
+      }
+
+      // Check optional AUTH_TOKEN
       if (env.AUTH_TOKEN) {
         const authHeader = request.headers.get("Authorization");
         if (!authHeader || !authHeader.startsWith("Bearer ") || authHeader.split(" ")[1] !== env.AUTH_TOKEN) {
           return new Response(JSON.stringify({ error: "Unauthorized: Invalid or missing token" }), {
             status: 401,
-            headers: { "Content-Type": "application/json" },
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
       }
@@ -110,7 +126,7 @@ export default {
       if (url.pathname === "/health") {
         return new Response(JSON.stringify({ status: "healthy", timestamp: new Date().toISOString(), service: "Spark Assistant Slack MCP Worker" }), {
           status: 200,
-          headers: { "Content-Type": "application/json" },
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
@@ -119,7 +135,8 @@ export default {
 
       if (request.method === "POST" && (url.pathname === "/mcp" || url.pathname === "/")) {
         const body = await request.json();
-        
+
+        // Standard MCP Initialization
         if (body.method === "initialize") {
           return new Response(JSON.stringify({
             jsonrpc: "2.0",
@@ -135,10 +152,19 @@ export default {
               }
             }
           }), {
-            headers: { "Content-Type": "application/json" }
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
           });
         }
 
+        // Notification when client is ready
+        if (body.method === "notifications/initialized") {
+          return new Response(null, {
+            status: 200,
+            headers: corsHeaders
+          });
+        }
+
+        // List Tools
         if (body.method === "tools/list") {
           return new Response(JSON.stringify({
             jsonrpc: "2.0",
@@ -158,7 +184,7 @@ export default {
                 },
                 {
                   name: "slack_post_message",
-                  description: "Post a message to a Slack channel",
+                  description: "Post a message to a Slack channel or DM to user",
                   inputSchema: {
                     type: "object",
                     properties: {
@@ -251,10 +277,11 @@ export default {
               ]
             }
           }), {
-            headers: { "Content-Type": "application/json" }
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
           });
         }
 
+        // Call Tool
         if (body.method === "tools/call") {
           const { name, arguments: args } = body.params || {};
           let resultText = "";
@@ -287,7 +314,10 @@ export default {
             const res = await slackClient.getUserProfile(args?.user_id);
             resultText = res.ok ? JSON.stringify(res.profile) : `Error: ${res.error}`;
           } else {
-            return new Response(JSON.stringify({ jsonrpc: "2.0", id: body.id, error: { code: -32601, message: "Method not found" } }), { status: 404 });
+            return new Response(JSON.stringify({ jsonrpc: "2.0", id: body.id, error: { code: -32601, message: "Method not found" } }), { 
+              status: 404, 
+              headers: { ...corsHeaders, "Content-Type": "application/json" }
+            });
           }
 
           return new Response(JSON.stringify({
@@ -296,7 +326,7 @@ export default {
             result: {
               content: [{ type: "text", text: resultText }]
             }
-          }), { headers: { "Content-Type": "application/json" } });
+          }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
       }
 
@@ -306,13 +336,14 @@ export default {
         endpoints: ["/mcp", "/health"]
       }), {
         status: 200,
-        headers: { "Content-Type": "application/json" },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     } catch (err) {
       return new Response(JSON.stringify({ error: err?.message || String(err), stack: err?.stack }), {
         status: 500,
-        headers: { "Content-Type": "application/json" },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
   },
 };
+
