@@ -1,6 +1,3 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { z } from "zod";
-
 class SlackClient {
   constructor(botToken) {
     this.botHeaders = {
@@ -95,169 +92,6 @@ class SlackClient {
   }
 }
 
-function createSlackServer(slackClient, env) {
-  const server = new McpServer({
-    name: "spark-assistant-slack-mcp",
-    version: "1.0.0",
-  });
-
-  server.tool(
-    "slack_list_channels",
-    "List public and private channels in the workspace",
-    { limit: z.number().optional(), cursor: z.string().optional() },
-    async ({ limit, cursor }) => {
-      try {
-        const result = await slackClient.getChannels(limit, cursor, env.SLACK_TEAM_ID, env.SLACK_CHANNEL_IDS);
-        if (!result.ok) {
-          return { content: [{ type: "text", text: `Slack API error: ${result.error || "Unknown error"}` }], isError: true };
-        }
-        const channelList = result.channels.map((c) => `- #${c.name} (ID: ${c.id})`).join("\n");
-        return { content: [{ type: "text", text: `Channels:\n${channelList}` }] };
-      } catch (err) {
-        return { content: [{ type: "text", text: `Error listing channels: ${err.message}` }], isError: true };
-      }
-    }
-  );
-
-  server.tool(
-    "slack_post_message",
-    "Post a message to a Slack channel",
-    { channel_id: z.string(), text: z.string() },
-    async ({ channel_id, text }) => {
-      try {
-        const result = await slackClient.postMessage(channel_id, text);
-        if (!result.ok) {
-          return { content: [{ type: "text", text: `Slack API error: ${result.error || "Unknown error"}` }], isError: true };
-        }
-        return { content: [{ type: "text", text: `Message posted successfully to channel ${channel_id}` }] };
-      } catch (err) {
-        return { content: [{ type: "text", text: `Error posting message: ${err.message}` }], isError: true };
-      }
-    }
-  );
-
-  server.tool(
-    "slack_reply_to_thread",
-    "Reply to a message thread",
-    { channel_id: z.string(), thread_ts: z.string(), text: z.string() },
-    async ({ channel_id, thread_ts, text }) => {
-      try {
-        const result = await slackClient.postReply(channel_id, thread_ts, text);
-        if (!result.ok) {
-          return { content: [{ type: "text", text: `Slack API error: ${result.error || "Unknown error"}` }], isError: true };
-        }
-        return { content: [{ type: "text", text: `Reply posted successfully` }] };
-      } catch (err) {
-        return { content: [{ type: "text", text: `Error posting reply: ${err.message}` }], isError: true };
-      }
-    }
-  );
-
-  server.tool(
-    "slack_add_reaction",
-    "Add an emoji reaction to a message",
-    { channel_id: z.string(), timestamp: z.string(), reaction: z.string() },
-    async ({ channel_id, timestamp, reaction }) => {
-      try {
-        const result = await slackClient.addReaction(channel_id, timestamp, reaction);
-        if (!result.ok) {
-          return { content: [{ type: "text", text: `Slack API error: ${result.error || "Unknown error"}` }], isError: true };
-        }
-        return { content: [{ type: "text", text: `Added :${reaction}: reaction` }] };
-      } catch (err) {
-        return { content: [{ type: "text", text: `Error adding reaction: ${err.message}` }], isError: true };
-      }
-    }
-  );
-
-  server.tool(
-    "slack_get_channel_history",
-    "Get channel message history",
-    { channel_id: z.string(), limit: z.number().optional() },
-    async ({ channel_id, limit }) => {
-      try {
-        const result = await slackClient.getChannelHistory(channel_id, limit);
-        if (!result.ok) {
-          return { content: [{ type: "text", text: `Slack API error: ${result.error || "Unknown error"}` }], isError: true };
-        }
-        return { content: [{ type: "text", text: JSON.stringify(result.messages, null, 2) }] };
-      } catch (err) {
-        return { content: [{ type: "text", text: `Error getting channel history: ${err.message}` }], isError: true };
-      }
-    }
-  );
-
-  server.tool(
-    "slack_get_thread_replies",
-    "Get replies in a thread",
-    { channel_id: z.string(), thread_ts: z.string() },
-    async ({ channel_id, thread_ts }) => {
-      try {
-        const result = await slackClient.getThreadReplies(channel_id, thread_ts);
-        if (!result.ok) {
-          return { content: [{ type: "text", text: `Slack API error: ${result.error || "Unknown error"}` }], isError: true };
-        }
-        return { content: [{ type: "text", text: JSON.stringify(result.messages, null, 2) }] };
-      } catch (err) {
-        return { content: [{ type: "text", text: `Error getting thread replies: ${err.message}` }], isError: true };
-      }
-    }
-  );
-
-  server.tool(
-    "slack_get_users",
-    "Get list of workspace users",
-    { limit: z.number().optional(), cursor: z.string().optional() },
-    async ({ limit, cursor }) => {
-      try {
-        const result = await slackClient.getUsers(limit, cursor, env.SLACK_TEAM_ID);
-        if (!result.ok) {
-          return { content: [{ type: "text", text: `Slack API error: ${result.error || "Unknown error"}` }], isError: true };
-        }
-        return { content: [{ type: "text", text: JSON.stringify(result.members, null, 2) }] };
-      } catch (err) {
-        return { content: [{ type: "text", text: `Error getting users: ${err.message}` }], isError: true };
-      }
-    }
-  );
-
-  server.tool(
-    "slack_get_user_profile",
-    "Get detailed profile for a user",
-    { user_id: z.string() },
-    async ({ user_id }) => {
-      try {
-        const result = await slackClient.getUserProfile(user_id);
-        if (!result.ok) {
-          return { content: [{ type: "text", text: `Slack API error: ${result.error || "Unknown error"}` }], isError: true };
-        }
-        return { content: [{ type: "text", text: JSON.stringify(result.profile, null, 2) }] };
-      } catch (err) {
-        return { content: [{ type: "text", text: `Error getting user profile: ${err.message}` }], isError: true };
-      }
-    }
-  );
-
-  server.tool(
-    "slack_auth_test",
-    "Test Slack API authentication and workspace info",
-    {},
-    async () => {
-      try {
-        const result = await slackClient.authTest();
-        if (!result.ok) {
-          return { content: [{ type: "text", text: `Auth test failed: ${result.error || "Unknown error"}` }], isError: true };
-        }
-        return { content: [{ type: "text", text: `Authenticated successfully as ${result.user} (ID: ${result.user_id}) on workspace ${result.team} (ID: ${result.team_id})` }] };
-      } catch (err) {
-        return { content: [{ type: "text", text: `Error testing authentication: ${err.message}` }], isError: true };
-      }
-    }
-  );
-
-  return server;
-}
-
 export default {
   async fetch(request, env, ctx) {
     try {
@@ -282,12 +116,10 @@ export default {
 
       const botToken = env.SLACK_BOT_TOKEN || "";
       const slackClient = new SlackClient(botToken);
-      const server = createSlackServer(slackClient, env);
 
       if (request.method === "POST" && (url.pathname === "/mcp" || url.pathname === "/")) {
         const body = await request.json();
         
-        // Custom lightweight JSON-RPC handler for Cloudflare Workers
         if (body.method === "initialize") {
           return new Response(JSON.stringify({
             jsonrpc: "2.0",
@@ -313,15 +145,109 @@ export default {
             id: body.id,
             result: {
               tools: [
-                { name: "slack_list_channels", description: "List public and private channels in the workspace" },
-                { name: "slack_post_message", description: "Post a message to a Slack channel" },
-                { name: "slack_reply_to_thread", description: "Reply to a message thread" },
-                { name: "slack_add_reaction", description: "Add an emoji reaction to a message" },
-                { name: "slack_get_channel_history", description: "Get channel message history" },
-                { name: "slack_get_thread_replies", description: "Get replies in a thread" },
-                { name: "slack_get_users", description: "Get list of workspace users" },
-                { name: "slack_get_user_profile", description: "Get detailed profile for a user" },
-                { name: "slack_auth_test", description: "Test Slack API authentication and workspace info" }
+                {
+                  name: "slack_list_channels",
+                  description: "List public and private channels in the workspace",
+                  inputSchema: {
+                    type: "object",
+                    properties: {
+                      limit: { type: "number" },
+                      cursor: { type: "string" }
+                    }
+                  }
+                },
+                {
+                  name: "slack_post_message",
+                  description: "Post a message to a Slack channel",
+                  inputSchema: {
+                    type: "object",
+                    properties: {
+                      channel_id: { type: "string" },
+                      text: { type: "string" }
+                    },
+                    required: ["channel_id", "text"]
+                  }
+                },
+                {
+                  name: "slack_reply_to_thread",
+                  description: "Reply to a message thread",
+                  inputSchema: {
+                    type: "object",
+                    properties: {
+                      channel_id: { type: "string" },
+                      thread_ts: { type: "string" },
+                      text: { type: "string" }
+                    },
+                    required: ["channel_id", "thread_ts", "text"]
+                  }
+                },
+                {
+                  name: "slack_add_reaction",
+                  description: "Add an emoji reaction to a message",
+                  inputSchema: {
+                    type: "object",
+                    properties: {
+                      channel_id: { type: "string" },
+                      timestamp: { type: "string" },
+                      reaction: { type: "string" }
+                    },
+                    required: ["channel_id", "timestamp", "reaction"]
+                  }
+                },
+                {
+                  name: "slack_get_channel_history",
+                  description: "Get channel message history",
+                  inputSchema: {
+                    type: "object",
+                    properties: {
+                      channel_id: { type: "string" },
+                      limit: { type: "number" }
+                    },
+                    required: ["channel_id"]
+                  }
+                },
+                {
+                  name: "slack_get_thread_replies",
+                  description: "Get replies in a thread",
+                  inputSchema: {
+                    type: "object",
+                    properties: {
+                      channel_id: { type: "string" },
+                      thread_ts: { type: "string" }
+                    },
+                    required: ["channel_id", "thread_ts"]
+                  }
+                },
+                {
+                  name: "slack_get_users",
+                  description: "Get list of workspace users",
+                  inputSchema: {
+                    type: "object",
+                    properties: {
+                      limit: { type: "number" },
+                      cursor: { type: "string" }
+                    }
+                  }
+                },
+                {
+                  name: "slack_get_user_profile",
+                  description: "Get detailed profile for a user",
+                  inputSchema: {
+                    type: "object",
+                    properties: {
+                      user_id: { type: "string" }
+                    },
+                    required: ["user_id"]
+                  }
+                },
+                {
+                  name: "slack_auth_test",
+                  description: "Test Slack API authentication and workspace info",
+                  inputSchema: {
+                    type: "object",
+                    properties: {}
+                  }
+                }
               ]
             }
           }), {
