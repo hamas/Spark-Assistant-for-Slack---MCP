@@ -163,10 +163,10 @@ const authMiddleware = (req: express.Request, res: express.Response, next: expre
   if (!activeAuthToken) return next();
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.status(401).json({ jsonrpc: "2.0", error: { code: -32000, message: "Unauthorized" }, id: null });
+    return res.status(401).json({ jsonrpc: "2.0", error: { code: -32000, message: "Unauthorized: Missing Authorization header" }, id: null });
   }
   if (authHeader.substring(7) !== activeAuthToken) {
-    return res.status(401).json({ jsonrpc: "2.0", error: { code: -32000, message: "Invalid token" }, id: null });
+    return res.status(401).json({ jsonrpc: "2.0", error: { code: -32000, message: "Unauthorized: Invalid token" }, id: null });
   }
   next();
 };
@@ -191,14 +191,14 @@ app.post("/mcp", authMiddleware, async (req, res) => {
       const server = createSlackServer(slackClient);
       await server.connect(transport);
     } else {
-      res.status(400).json({ jsonrpc: "2.0", error: { code: -32000, message: "Bad Request" }, id: null });
+      res.status(400).json({ jsonrpc: "2.0", error: { code: -32000, message: "Bad Request: Invalid session or non-initialize request" }, id: null });
       return;
     }
     await transport.handleRequest(req, res, req.body);
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error handling MCP request:", error);
     if (!res.headersSent) {
-      res.status(500).json({ jsonrpc: "2.0", error: { code: -32603, message: "Internal server error" }, id: null });
+      res.status(500).json({ jsonrpc: "2.0", error: { code: -32603, message: error?.message || "Internal server error" }, id: null });
     }
   }
 });
@@ -219,8 +219,15 @@ app.get("/health", (req, res) => {
   res.status(200).json({ status: "healthy", timestamp: new Date().toISOString(), service: "Spark Assistant Slack MCP Server", version: "1.0.0" });
 });
 
-app.get("/", (req, res) => {
-  res.status(200).json({ status: "healthy", message: "Spark Assistant Slack MCP Server is live!", endpoints: ["/mcp", "/health"] });
+app.get("*", (req, res) => {
+  res.status(200).json({ status: "healthy", message: "Spark Assistant Slack MCP Server is live on Vercel!", endpoints: ["/mcp", "/health"] });
 });
 
-export default app;
+export default function handler(req: any, res: any) {
+  try {
+    return app(req, res);
+  } catch (err: any) {
+    console.error("Vercel Serverless Function Error:", err);
+    res.status(500).json({ error: err?.message || "Function error" });
+  }
+}
