@@ -11,17 +11,18 @@
   },
   "bugs": "https://github.com/hamas/Spark-Assistant-for-Slack---MCP/issues",
   "type": "module",
-  "main": "dist/index.js",
+  "main": "worker.js",
   "bin": {
     "spark-slack-mcp": "dist/index.js",
     "slack-mcp": "dist/index.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "worker.js"
   ],
   "scripts": {
     "build": "tsc && shx chmod +x dist/*.js",
-    "deploy": "wrangler deploy dist/index.js",
+    "deploy": "wrangler deploy worker.js",
     "watch": "tsc --watch",
     "test": "node --experimental-vm-modules node_modules/.bin/jest",
     "test:watch": "node --experimental-vm-modules node_modules/.bin/jest --watch",
