@@ -22,7 +22,7 @@
   ],
   "scripts": {
     "build": "tsc && shx chmod +x dist/*.js",
-    "deploy": "wrangler deploy worker.js",
+    "deploy": "npx wrangler deploy worker.js --compatibility-flag=nodejs_compat",
     "watch": "tsc --watch",
     "test": "node --experimental-vm-modules node_modules/.bin/jest",
     "test:watch": "node --experimental-vm-modules node_modules/.bin/jest --watch",
